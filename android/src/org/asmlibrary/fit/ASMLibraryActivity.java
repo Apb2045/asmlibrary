@@ -23,7 +23,7 @@ import android.hardware.Camera;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -57,7 +57,6 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
 	private Button mAvatarButton = null;
 	private TextView mCameraText = null;
 	private TextView mGallaryText = null;
-	
     private Mat                    	mRgba;
     private Mat                    	mSmallRgba;
     private Mat                    	mGray;
@@ -75,7 +74,7 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
     private static final Scalar 	mCyanColor = new Scalar(0, 255, 255);
     private CameraView   			mCameraView;
     private MatrixImageView   		mImageView;
-    private LoadingCircleView 		mLoadingView;
+    private ProgressDialog			mProgress;
     
     public ASMLibraryActivity() 
     {
@@ -92,20 +91,17 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
     		switch(msg.what) {
     			case MSG_SUCCESS:
     				mFittingDone = true;
-    				mLoadingView.setVisibility(SurfaceView.GONE);
+    				mProgress.dismiss();
     				mImageView.setImageBitmap((Bitmap) msg.obj);  
     				Toast.makeText(getApplication(), "Fitting Done", Toast.LENGTH_LONG).show();  
     				break; 
     			case MSG_FAILURE:  
     				mFittingDone = true;
-    				mLoadingView.setVisibility(SurfaceView.GONE);
+    				mProgress.dismiss();
     				Toast.makeText(getApplication(), "Canot detect any face", Toast.LENGTH_LONG).show();  
     				break;  
-    			case MSG_PROGRESS:
-    				mLoadingView.setProgress(msg.arg1);
-    				break;
-		    	case MSG_STATUS:
-					mLoadingView.setStatus(msg.arg1 == 0 ? "Detecting" : "Alignment");
+    			case MSG_STATUS:
+    				mProgress.setMessage(msg.arg1 == 0 ? "Detecting" : "Alignment");
 					break;
     		}
 		}  
@@ -150,8 +146,15 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
     		}
     	}
     	
+    	if(mBitmap == null)
+    	{
+    		Toast.makeText(mApp.getBaseContext(), "Cannot open image file " + imgName, Toast.LENGTH_LONG).show();
+			return;	
+    	}
+    	
     	mImageView.setImageBitmap(mBitmap);
-    	mLoadingView.setVisibility(SurfaceView.VISIBLE);
+    	mProgress = ProgressDialog.show(ASMLibraryActivity.this, null, "Loading", true);
+    	mProgress.setCancelable(false);
     	
     	new Thread(new Runnable() {  
     		@Override  
@@ -245,7 +248,7 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
         if(savedInstanceState != null)
         	mCamera = savedInstanceState.getBoolean(flagKey, true);
         
-        setContentView(R.layout.main);
+        //setContentView(R.layout.main);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, 
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -260,10 +263,7 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
         mImageView = (MatrixImageView)findViewById(R.id.image_view);
         mImageView.setVisibility(SurfaceView.GONE);
         mImageView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        
-        mLoadingView = (LoadingCircleView) findViewById(R.id.loading_cirle_view);
-        mLoadingView.setVisibility(SurfaceView.GONE);
-        
+                
         LayoutInflater controlInflater = LayoutInflater.from(getBaseContext());
 		View viewControl = controlInflater.inflate(R.layout.main, null);
 		LayoutParams layoutParamsControl = new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
@@ -401,8 +401,8 @@ public class ASMLibraryActivity extends Activity implements CvCameraViewListener
 	        String path = null;
 	        if( cursor != null ){
 	            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-	            cursor.moveToFirst();
-	            path = cursor.getString(column_index);
+	            if(cursor.moveToFirst())
+	            	path = cursor.getString(column_index);
             	cursor.close();
 	        }
 	        if(path == null)
